@@ -144,6 +144,7 @@ namespace EchoBot.Services.Authentication
         /// <returns>The <see cref="RequestValidationResult" /> structure.</returns>
         public async Task<RequestValidationResult> ValidateInboundRequestAsync(HttpRequestMessage request)
         {
+            // TODO what is this?
             return new RequestValidationResult()
             {
                 IsValid = true,

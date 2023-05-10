@@ -166,11 +166,15 @@ namespace EchoBot.Services.Bot
                 await Task.WhenAll(this.audioSendStatusActive.Task).ConfigureAwait(false);
 
                 _logger.LogInformation("Send status active for audio and video Creating the audio video player");
+
+                // 1000 was there, 100 produces completely different errors
+                const int minEnqueuedMediaLengthInMs = 1000;
+
                 this.audioVideoFramePlayerSettings =
-                    new AudioVideoFramePlayerSettings(new AudioSettings(20), new VideoSettings(), 1000);
+                    new AudioVideoFramePlayerSettings(new AudioSettings(buffersizeInMs: 20), new VideoSettings(), minEnqueuedMediaLengthInMs);
                 this.audioVideoFramePlayer = new AudioVideoFramePlayer(
                     (AudioSocket)_audioSocket,
-                    null,
+                    videoSocket: null,
                     this.audioVideoFramePlayerSettings);
 
                 _logger.LogInformation("created the audio video player");
@@ -193,7 +197,7 @@ namespace EchoBot.Services.Bot
         /// <param name="e">Event arguments.</param>
         private void OnAudioSendStatusChanged(object sender, AudioSendStatusChangedEventArgs e)
         {
-            _logger.LogTrace($"[AudioSendStatusChangedEventArgs(MediaSendStatus={e.MediaSendStatus})]");
+            _logger.LogInformation($"[AudioSendStatusChangedEventArgs(MediaSendStatus={e.MediaSendStatus})]");
 
             if (e.MediaSendStatus == MediaSendStatus.Active)
             {
@@ -208,21 +212,21 @@ namespace EchoBot.Services.Bot
         /// <param name="e">The audio media received arguments.</param>
         private async void OnAudioMediaReceived(object sender, AudioMediaReceivedEventArgs e)
         {
-            _logger.LogTrace($"Received Audio: [AudioMediaReceivedEventArgs(Data=<{e.Buffer.Data.ToString()}>, Length={e.Buffer.Length}, Timestamp={e.Buffer.Timestamp})]");
+            _logger.LogInformation($"===============> Received Audio: [AudioMediaReceivedEventArgs(Data=<{e.Buffer.Data.ToString()}>, Length={e.Buffer.Length}, Timestamp={e.Buffer.Timestamp})]");
 
             try
             {
                 if (_languageService != null)
                 {
                     // send audio buffer to language service for processing
-                    // the particpant talking will hear the bot repeat what they said
+                    // the participant talking will hear the bot repeat what they said
                     await _languageService.AppendAudioBuffer(e.Buffer);
                     e.Buffer.Dispose();
                 }
                 else
                 {
                     // send audio buffer back on the audio socket
-                    // the particpant talking will hear themselves
+                    // the participant talking will hear themselves
                     var length = e.Buffer.Length;
                     if (length > 0)
                     {
@@ -231,7 +235,17 @@ namespace EchoBot.Services.Bot
 
                         var currentTick = DateTime.Now.Ticks;
                         this.audioMediaBuffers = Util.Utilities.CreateAudioMediaBuffers(buffer, currentTick, _logger);
-                        await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>());
+
+                        // await Task.Delay(TimeSpan.FromSeconds(5));
+                        // TODO why is this null sometimes???
+                        if (this.audioVideoFramePlayer is null)
+                        {
+                            this._logger.LogError("!!! audioVideoFramePlayer is null !!!");
+                        }
+                        else
+                        {
+                            await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>());
+                        }
                     }
                 }
             }

@@ -55,7 +55,7 @@ namespace EchoBot.Services.Bot
             AppSettings settings,
             ILogger logger
         )
-            : base(TimeSpan.FromMinutes(10), statefulCall?.GraphLogger)
+            : base(frequency: TimeSpan.FromMinutes(10), statefulCall?.GraphLogger)
         {
             this.Call = statefulCall;
             this.Call.OnUpdated += this.CallOnUpdated;

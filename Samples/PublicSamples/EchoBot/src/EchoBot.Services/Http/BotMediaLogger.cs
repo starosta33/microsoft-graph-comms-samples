@@ -25,27 +25,21 @@ namespace EchoBot.Services.Http
 
        public void WriteLog(MediaLogLevel level, string logStatement)
        {
-           LogLevel logLevel;
-            switch (level)
-            {
-                case MediaLogLevel.Error:
-                    logLevel = LogLevel.Error;
-                    break;
-                case MediaLogLevel.Warning:
-                    logLevel = LogLevel.Warning;
-                    break;
-                case MediaLogLevel.Information:
-                    logLevel = LogLevel.Information;
-                    break;
-                case MediaLogLevel.Verbose:
-                    logLevel = LogLevel.Trace;
-                    break;
-                default:
-                    logLevel = LogLevel.Trace;
-                    break;
-            }
-            
-            this._logger.Log(logLevel, logStatement);
-        }
+           LogLevel logLevel = level switch
+           {
+               MediaLogLevel.Error => LogLevel.Error,
+               MediaLogLevel.Warning => LogLevel.Warning,
+               MediaLogLevel.Information => LogLevel.Information,
+               MediaLogLevel.Verbose => LogLevel.Trace,
+               _ => LogLevel.Trace
+           };
+
+           // TODO fix here
+           // if (logLevel is LogLevel.Critical or LogLevel.Error or LogLevel.Warning)
+           // {
+               // this._logger.Log(logLevel, "------> " + logStatement);
+           // }
+           this._logger.Log(logLevel, logStatement);
+       }
     }
 }

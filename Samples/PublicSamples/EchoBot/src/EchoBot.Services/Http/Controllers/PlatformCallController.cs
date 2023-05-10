@@ -12,15 +12,25 @@
 // <summary></summary>
 // ***********************************************************************>
 
+using System.Linq;
+
 using Microsoft.Graph.Communications.Client;
 using Microsoft.Graph.Communications.Common.Telemetry;
 using EchoBot.Model.Constants;
 using EchoBot.Services.Contract;
 using EchoBot.Services.ServiceSetup;
 using System.Net.Http;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Web.Http;
 using EchoBot.Services.Extensions;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Graph;
+using Microsoft.Owin.Logging;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace EchoBot.Services.Http.Controllers
 {
@@ -30,14 +40,12 @@ namespace EchoBot.Services.Http.Controllers
     [RoutePrefix(HttpRouteConstants.CallSignalingRoutePrefix)]
     public class PlatformCallController : ApiController
     {
+        private readonly ILogger<PlatformCallController> logger;
+
         /// <summary>
         /// The bot service
         /// </summary>
         private readonly IBotService _botService;
-        /// <summary>
-        /// The logger
-        /// </summary>
-        private readonly IGraphLogger _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PlatformCallController" /> class.
@@ -46,7 +54,7 @@ namespace EchoBot.Services.Http.Controllers
         public PlatformCallController()
         {
             _botService = AppHost.AppHostInstance.Resolve<IBotService>();
-            _logger = AppHost.AppHostInstance.Resolve<IGraphLogger>();
+            logger = AppHost.AppHostInstance.Resolve<ILogger<PlatformCallController>>();
         }
 
         /// <summary>
@@ -58,7 +66,7 @@ namespace EchoBot.Services.Http.Controllers
         public async Task<HttpResponseMessage> OnIncomingRequestAsync()
         {
             var log = $"Received HTTP {this.Request.Method}, {this.Request.RequestUri}";
-            _logger.Info(log);
+            this.logger.LogInformation(log);
 
             var response = await _botService.Client.ProcessNotificationAsync(this.Request).ConfigureAwait(false);
 
@@ -74,9 +82,12 @@ namespace EchoBot.Services.Http.Controllers
         public async Task<HttpResponseMessage> OnNotificationRequestAsync()
         {
             var log = $"Received HTTP {this.Request.Method}, {this.Request.RequestUri}";
-            _logger.Info(log);
+            this.logger.LogInformation(log);
 
             // Pass the incoming notification to the sdk. The sdk takes care of what to do with it.
+            var payload = await this.Request.Content.ReadAsStringAsync();
+            var notification = JsonConvert.DeserializeObject<CommsNotifications>(payload);
+            this.logger.LogInformation($"=====> Received notification: {((JObject)notification.Value.First().AdditionalData["resourceData"])["state"]}");
             var response = await _botService.Client.ProcessNotificationAsync(this.Request).ConfigureAwait(false);
 
             return await ControllerExtensions.GetActionResultAsync(this.Request, response).ConfigureAwait(false);

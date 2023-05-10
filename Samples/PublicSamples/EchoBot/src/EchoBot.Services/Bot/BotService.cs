@@ -88,7 +88,7 @@ namespace EchoBot.Services.Bot
         /// <param name="settings">The settings.</param>
         public BotService(
             IGraphLogger graphLogger,
-            ILogger<BotService> logger, 
+            ILogger<BotService> logger,
             IOptions<AppSettings> settings,
             IAzureSettings azureSettings)
         {
@@ -199,11 +199,13 @@ namespace EchoBot.Services.Bot
                 return this.Client.CreateMediaSession(
                     new AudioSocketSettings
                     {
+                        // TODO revert?
+                        CallId = mediaSessionId.ToString(),
                         StreamDirections = StreamDirection.Sendrecv,
                         // Note! Currently, the only audio format supported when receiving unmixed audio is Pcm16K
                         SupportedAudioFormat = AudioFormat.Pcm16K,
                         ReceiveUnmixedMeetingAudio = false //get the extra buffers for the speakers
-                },
+                    },
                     new VideoSocketSettings
                     {
                         StreamDirections = StreamDirection.Inactive
@@ -229,20 +231,16 @@ namespace EchoBot.Services.Bot
                 // Get the policy recording parameters.
 
                 // The context associated with the incoming call.
-                IncomingContext incomingContext =
-                    call.Resource.IncomingContext;
+                IncomingContext incomingContext = call.Resource.IncomingContext;
 
                 // The RP participant.
-                string observedParticipantId =
-                    incomingContext.ObservedParticipantId;
+                string observedParticipantId = incomingContext.ObservedParticipantId;
 
                 // If the observed participant is a delegate.
-                IdentitySet onBehalfOfIdentity =
-                    incomingContext.OnBehalfOf;
+                IdentitySet onBehalfOfIdentity = incomingContext.OnBehalfOf;
 
                 // If a transfer occured, the transferor.
-                IdentitySet transferorIdentity =
-                    incomingContext.Transferor;
+                IdentitySet transferorIdentity = incomingContext.Transferor;
 
                 string countryCode = null;
                 EndpointType? endpointType = null;

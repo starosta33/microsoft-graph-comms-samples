@@ -53,7 +53,7 @@ namespace EchoBot.Services.Util
                 referenceTime += numberOfTicksInOneAudioBuffers;
             }
 
-            logger.LogTrace($"created {audioMediaBuffers.Count} AudioMediaBuffers");
+            logger.LogInformation($"created {audioMediaBuffers.Count} AudioMediaBuffers");
             return audioMediaBuffers;
         }
 
@@ -72,7 +72,7 @@ namespace EchoBot.Services.Util
             audioMediaBuffers.Add(audioBuffer);
             referenceTime += numberOfTicksInOneAudioBuffers;
 
-            logger.LogTrace($"created {audioMediaBuffers.Count} AudioMediaBuffers");
+            logger.LogInformation($"created {audioMediaBuffers.Count} AudioMediaBuffers");
             return audioMediaBuffers;
         }
     }

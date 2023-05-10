@@ -18,8 +18,12 @@ using Microsoft.Owin.Hosting;
 using EchoBot.Services.Contract;
 using EchoBot.Services.Http;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+
 using Microsoft.ApplicationInsights.Channel;
 using Microsoft.Extensions.Logging;
+using Microsoft.Graph.Communications.Common.Telemetry.Obfuscation;
 
 namespace EchoBot.Services.ServiceSetup
 {
@@ -121,7 +125,9 @@ namespace EchoBot.Services.ServiceSetup
                     (appBuilder) =>
                     {
                         var startup = new HttpConfigurationInitializer();
-                        startup.ConfigureSettings(appBuilder, _graphLogger, _logger);
+
+                        // TODO graph logger to console?\
+                        startup.ConfigureSettings(appBuilder, new CustomLogger(this._logger), _logger);
                     });
             }
             catch (Exception e)
@@ -145,6 +151,36 @@ namespace EchoBot.Services.ServiceSetup
         public T Resolve<T>()
         {
             return ServiceProvider.GetService<T>();
+        }
+
+        private class CustomLogger : IGraphLogger
+        {
+            private readonly ILogger<AppHost> logger;
+
+            public CustomLogger(ILogger<AppHost> logger)
+            {
+                this.logger = logger;
+            }
+
+            public IDisposable Subscribe(IObserver<LogEvent> observer)
+            {
+                throw new NotImplementedException();
+            }
+
+            public LogEvent Log(TraceLevel level, string message, string component = null, Guid correlationId = new Guid(), Guid requestId = new Guid(),
+                LogEventType eventType = LogEventType.Trace,
+                IEnumerable<object> properties = null, string memberName = null, string filePath = null, int lineNumber = 0)
+            {
+                this.logger.Log(level.ToLogLevel(), message);
+                return new LogEvent();
+            }
+
+            public TraceLevel DiagnosticLevel { get; set; }
+            public ObfuscationConfiguration ObfuscationConfiguration { get; }
+            public Guid CorrelationId { get; set; }
+            public string RequestId { get; set; }
+            public uint LogicalThreadId { get; set; }
+            public IReadOnlyDictionary<Type, object> Properties { get; }
         }
     }
 }
