@@ -13,21 +13,18 @@
 // ***********************************************************************>
 
 using System.Linq;
-
-using Microsoft.Graph.Communications.Client;
-using Microsoft.Graph.Communications.Common.Telemetry;
-using EchoBot.Model.Constants;
-using EchoBot.Services.Contract;
-using EchoBot.Services.ServiceSetup;
 using System.Net.Http;
-using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Web.Http;
+
+using EchoBot.Model.Constants;
+using EchoBot.Services.Contract;
 using EchoBot.Services.Extensions;
+using EchoBot.Services.ServiceSetup;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
-using Microsoft.Owin.Logging;
+using Microsoft.Graph.Communications.Client;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -87,7 +84,17 @@ namespace EchoBot.Services.Http.Controllers
             // Pass the incoming notification to the sdk. The sdk takes care of what to do with it.
             var payload = await this.Request.Content.ReadAsStringAsync();
             var notification = JsonConvert.DeserializeObject<CommsNotifications>(payload);
-            this.logger.LogInformation($"=====> Received notification: {((JObject)notification.Value.First().AdditionalData["resourceData"])["state"]}");
+
+            var resourceData = notification.Value.First().AdditionalData["resourceData"];
+            if (resourceData is JObject jObject)
+            {
+                this.logger.LogInformation($"=====> Received notification: {jObject["state"]}");
+            }
+            // else if (resourceData is JArray jArray)
+            // {
+            //     this.logger.LogInformation($"=====> Received notification: {jArray.Select(x => x["state"])}");
+            // }
+
             var response = await _botService.Client.ProcessNotificationAsync(this.Request).ConfigureAwait(false);
 
             return await ControllerExtensions.GetActionResultAsync(this.Request, response).ConfigureAwait(false);

@@ -25,6 +25,9 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Runtime.InteropServices;
+
+using CognitiveServices.Translator;
+
 using EchoBot.Services.ServiceSetup;
 using Microsoft.Extensions.Logging;
 
@@ -35,7 +38,9 @@ namespace EchoBot.Services.Bot
     /// </summary>
     public class BotMediaStream : ObjectRootDisposable
     {
+        private readonly ITranslateClient translateClient;
         private AppSettings _settings;
+        private readonly Dictionary<string, string> participantDisplayNames = new();
 
         /// <summary>
         /// The participants
@@ -70,6 +75,7 @@ namespace EchoBot.Services.Bot
         public BotMediaStream(
             ILocalMediaSession mediaSession,
             string callId,
+            ITranslateClient translateClient,
             IGraphLogger graphLogger,
             ILogger logger,
             AppSettings settings
@@ -80,6 +86,7 @@ namespace EchoBot.Services.Bot
             ArgumentVerifier.ThrowOnNullArgument(logger, nameof(logger));
             ArgumentVerifier.ThrowOnNullArgument(settings, nameof(settings));
 
+            this.translateClient = translateClient;
             _settings = settings;
 
             this.participants = new List<IParticipant>();
@@ -104,7 +111,7 @@ namespace EchoBot.Services.Bot
 
             if (_settings.UseCognitiveServices)
             {
-                _languageService = new CognitiveServicesService(_settings, _logger);
+                _languageService = new CognitiveServicesService(_settings, translateClient, _logger);
                 _languageService.SendMediaBuffer += this.OnSendMediaBuffer;
             }
         }
@@ -212,7 +219,7 @@ namespace EchoBot.Services.Bot
         /// <param name="e">The audio media received arguments.</param>
         private async void OnAudioMediaReceived(object sender, AudioMediaReceivedEventArgs e)
         {
-            _logger.LogInformation($"===============> Received Audio: [AudioMediaReceivedEventArgs(Data=<{e.Buffer.Data.ToString()}>, Length={e.Buffer.Length}, Timestamp={e.Buffer.Timestamp})]");
+            _logger.LogTrace($"Received Audio: [AudioMediaReceivedEventArgs(Data=<{e.Buffer.Data.ToString()}>, Length={e.Buffer.Length}, Timestamp={e.Buffer.Timestamp})]");
 
             try
             {
@@ -220,7 +227,21 @@ namespace EchoBot.Services.Bot
                 {
                     // send audio buffer to language service for processing
                     // the participant talking will hear the bot repeat what they said
-                    await _languageService.AppendAudioBuffer(e.Buffer);
+                    // TODO do not send silence??
+                    // e.Buffer.IsSilence
+
+                    if (e.Buffer.UnmixedAudioBuffers is null)
+                    {
+                        await _languageService.AppendAudioBuffer(e.Buffer);
+                    }
+                    else
+                    {
+                        foreach (var unmixedAudioBuffer in e.Buffer.UnmixedAudioBuffers)
+                        {
+                            var displayName = this.participantDisplayNames.GetValueOrDefault(unmixedAudioBuffer.ActiveSpeakerId.ToString());
+                            await _languageService.AppendAudioBuffer(unmixedAudioBuffer, displayName);
+                        }
+                    }
                     e.Buffer.Dispose();
                 }
                 else
@@ -265,6 +286,19 @@ namespace EchoBot.Services.Bot
 
             this.audioMediaBuffers = e.AudioMediaBuffers;
             var result = Task.Run(async () => await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>())).GetAwaiter();
+        }
+
+        public void AddParticipant(string speakerId, string displayName)
+        {
+            this.participantDisplayNames.Add(speakerId, displayName);
+        }
+
+        public void RemoveParticipant(string speakerId)
+        {
+            if (this.participantDisplayNames.ContainsKey(speakerId))
+            {
+                this.participantDisplayNames.Remove(speakerId);
+            }
         }
     }
 }

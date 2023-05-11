@@ -135,8 +135,8 @@ namespace EchoBot.Services.ServiceSetup
                     InstanceInternalPort = _settings.MediaInternalPort,
 
                     // TODO!
-                    // InstancePublicIPAddress = IPAddress.Any,
-                    InstancePublicIPAddress = IPAddress.Parse("178.17.3.152"),
+                    // InstancePublicIPAddress = IPAddress.Parse("178.17.3.152"),
+                    InstancePublicIPAddress = IPAddress.Any,
                     InstancePublicPort = _settings.MediaInstanceExternalPort,
                     ServiceFqdn = _settings.MediaDnsName
                 },

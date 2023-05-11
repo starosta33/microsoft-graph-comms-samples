@@ -40,7 +40,8 @@ namespace EchoBot
                     // you can use appsettings or environment variables
                     // tell the builder to look for the appsettings.json file
                     builder
-                        .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                        .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
                         .AddEnvironmentVariables();
 
                     var bot = new AppHost();

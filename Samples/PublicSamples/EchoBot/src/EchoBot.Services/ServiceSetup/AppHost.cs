@@ -21,6 +21,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
+using CognitiveServices.Translator.Extension;
+
 using Microsoft.ApplicationInsights.Channel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph.Communications.Common.Telemetry.Obfuscation;
@@ -88,6 +90,7 @@ namespace EchoBot.Services.ServiceSetup
 
             ServiceCollection = new ServiceCollection();
             ServiceCollection.AddCoreServices(configuration, channel);
+            ServiceCollection.AddCognitiveServicesTranslator(configuration);
             ServiceProvider = ServiceCollection.BuildServiceProvider();
 
             _logger = ServiceProvider.GetRequiredService<ILogger<AppHost>>();

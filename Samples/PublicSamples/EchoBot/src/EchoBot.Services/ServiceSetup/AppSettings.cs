@@ -72,9 +72,15 @@
 
         /// <summary>
         /// Gets or sets the Cognitive Services Bot language
-        /// that it will use for speech-to-text and text-to-speech
+        /// that it will use for speech-to-text
         /// </summary>
-        public string BotLanguage { get; set; }
+        public string SpeechRecognitionLanguage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Cognitive Services Bot language
+        /// that it will use for text-to-speech
+        /// </summary>
+        public string SpeechSynthesisLanguage { get; set; }
 
         // set by dsc script
 
@@ -89,7 +95,7 @@
         /// used for media notifications
         /// </summary>
         public int MediaInstanceExternalPort { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the Application Insights Instrumentation key
         /// used for logging to app insights
