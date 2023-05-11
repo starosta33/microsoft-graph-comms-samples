@@ -47,7 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="appsettings.Development.json" />
-    <Content Include="appsettings.json">
+    <Content Include="appsettings.json5">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Compile Include="Program.cs" />

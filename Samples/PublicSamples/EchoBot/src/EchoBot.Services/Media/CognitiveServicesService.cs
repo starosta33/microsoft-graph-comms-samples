@@ -24,11 +24,13 @@ namespace EchoBot.Services.Media
         /// The is the indicator if the media stream is running
         /// </summary>
         private bool _isRunning = false;
+
         /// <summary>
         /// The is draining indicator
         /// </summary>
         protected bool _isDraining;
 
+        private readonly AppSettings settings;
         private readonly ITranslateClient translateClient;
 
         /// <summary>
@@ -39,8 +41,9 @@ namespace EchoBot.Services.Media
         private readonly AudioOutputStream _audioOutputStream = AudioOutputStream.CreatePullStream();
 
         private readonly SpeechConfig _speechConfig;
-        private SpeechRecognizer _recognizer;
         private readonly SpeechSynthesizer _synthesizer;
+        private SpeechRecognizer _recognizer;
+        private string currentSpeakerDisplayName;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CognitiveServicesService" /> class.
@@ -49,6 +52,7 @@ namespace EchoBot.Services.Media
             ITranslateClient translateClient,
             ILogger logger)
         {
+            this.settings = settings;
             this.translateClient = translateClient ?? throw new ArgumentNullException(nameof(translateClient));
             _logger = logger;
 
@@ -93,6 +97,7 @@ namespace EchoBot.Services.Media
         public async Task AppendAudioBuffer(UnmixedAudioBuffer audioBuffer, string displayName)
         {
             // TODO must be running in parallel and per speaker??!!
+            this.currentSpeakerDisplayName = displayName;
             this._logger.LogDebug($"Unmixed audio buffer received for speaker id: {audioBuffer.ActiveSpeakerId}, name: {displayName}");
 
             if (!_isRunning)
@@ -179,7 +184,7 @@ namespace EchoBot.Services.Media
 
                 _recognizer.Recognizing += (s, e) =>
                 {
-                    _logger.LogInformation($"RECOGNIZING: Text={e.Result.Text}");
+                    _logger.LogDebug($"RECOGNIZING: Text={e.Result.Text}");
                 };
 
                 _recognizer.Recognized += async (s, e) =>
@@ -189,10 +194,14 @@ namespace EchoBot.Services.Media
                         if (string.IsNullOrEmpty(e.Result.Text))
                             return;
 
-                        _logger.LogInformation($"RECOGNIZED: Text={e.Result.Text}");
+                        _logger.LogInformation($"===> From={this.currentSpeakerDisplayName}, Text={e.Result.Text}");
+
                         // We recognized the speech
                         // Now do Speech to Text
-                        await TextToSpeech(e.Result.Text);
+                        if (this.settings.UseTextToSpeech)
+                        {
+                            await TextToSpeech(e.Result.Text);
+                        }
                     }
                     else if (e.Result.Reason == ResultReason.NoMatch)
                     {
@@ -217,7 +226,7 @@ namespace EchoBot.Services.Media
                 _recognizer.SessionStarted += async (s, e) =>
                 {
                     _logger.LogInformation("\nSession started event.");
-                    await TextToSpeech("Hello");
+                    await TextToSpeech("Welcome to the call.", translate: false);
                 };
 
                 _recognizer.SessionStopped += (s, e) =>
@@ -250,9 +259,9 @@ namespace EchoBot.Services.Media
             _isDraining = false;
         }
 
-        private async Task TextToSpeech(string text)
+        private async Task TextToSpeech(string text, bool translate = true)
         {
-            if (_speechConfig.SpeechRecognitionLanguage != _speechConfig.SpeechSynthesisLanguage)
+            if (translate && _speechConfig.SpeechRecognitionLanguage != _speechConfig.SpeechSynthesisLanguage)
             {
                 var translatedText = Translate(text, _speechConfig.SpeechRecognitionLanguage, _speechConfig.SpeechSynthesisLanguage);
                 text = translatedText.First().Translations.First().Text;

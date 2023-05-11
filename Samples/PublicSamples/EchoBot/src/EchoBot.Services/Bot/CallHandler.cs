@@ -141,7 +141,7 @@ namespace EchoBot.Services.Bot
         /// <returns>System.String.</returns>
         private string UpdateParticipant(List<IParticipant> participants, IParticipant participant, bool added, string participantDisplayName = "")
         {
-            var speakerId = participant.Resource.MediaStreams.Where(x => x.MediaType == Modality.Audio && x.Label == "main-audio").FirstOrDefault()?.SourceId;
+            var speakerId = participant.Resource.MediaStreams.FirstOrDefault(x => x.MediaType == Modality.Audio && x.Label == "main-audio")?.SourceId;
             if (added)
             {
                 participants.Add(participant);
@@ -203,13 +203,7 @@ namespace EchoBot.Services.Bot
         /// </summary>
         /// <param name="p">The p.</param>
         /// <returns><c>true</c> if XXXX, <c>false</c> otherwise.</returns>
-        private bool CheckParticipantIsUsable(IParticipant p)
-        {
-            foreach (var i in p.Resource.Info.Identity.AdditionalData)
-                if (i.Key != "applicationInstance" && i.Value is Identity)
-                    return true;
-
-            return false;
-        }
+        private bool CheckParticipantIsUsable(IParticipant p) =>
+            p.Resource.Info.Identity.AdditionalData.Any(i => i.Key != "applicationInstance" && i.Value is Identity);
     }
 }

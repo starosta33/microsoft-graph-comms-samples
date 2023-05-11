@@ -82,6 +82,11 @@
         /// </summary>
         public string SpeechSynthesisLanguage { get; set; }
 
+        /// <summary>
+        /// Whether to proceed with translation and text-to-speech.
+        /// </summary>
+        public bool UseTextToSpeech { get; set; }
+
         // set by dsc script
 
         /// <summary>
