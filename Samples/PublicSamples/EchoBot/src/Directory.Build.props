@@ -1,0 +1,18 @@
+<Project>
+  <!-- Build properties-->
+  <PropertyGroup>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+<!--    <TargetFramework>net7.0</TargetFramework>-->
+<!--    <TargetFrameworkVersion>net7.0</TargetFrameworkVersion>-->
+    <LangVersion>latest</LangVersion>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(Configuration)' == 'Release'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="packages.lock.json" />
+  </ItemGroup>
+
+</Project>

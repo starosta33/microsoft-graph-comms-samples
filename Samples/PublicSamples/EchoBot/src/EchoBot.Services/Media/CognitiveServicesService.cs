@@ -3,9 +3,14 @@ using Microsoft.CognitiveServices.Speech.Audio;
 using Microsoft.Skype.Bots.Media;
 using EchoBot.Services.ServiceSetup;
 using System;
-using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
+
+using CognitiveServices.Translator;
+using CognitiveServices.Translator.Translate;
+
 using Microsoft.Extensions.Logging;
 
 namespace EchoBot.Services.Media
@@ -19,11 +24,15 @@ namespace EchoBot.Services.Media
         /// The is the indicator if the media stream is running
         /// </summary>
         private bool _isRunning = false;
+
         /// <summary>
         /// The is draining indicator
         /// </summary>
         protected bool _isDraining;
-        
+
+        private readonly AppSettings settings;
+        private readonly ITranslateClient translateClient;
+
         /// <summary>
         /// The logger
         /// </summary>
@@ -32,21 +41,27 @@ namespace EchoBot.Services.Media
         private readonly AudioOutputStream _audioOutputStream = AudioOutputStream.CreatePullStream();
 
         private readonly SpeechConfig _speechConfig;
-        private SpeechRecognizer _recognizer;
         private readonly SpeechSynthesizer _synthesizer;
+        private SpeechRecognizer _recognizer;
+        private string currentSpeakerDisplayName;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="CognitiveServicesService" /> class.
-        public CognitiveServicesService(AppSettings settings, ILogger logger)
+        public CognitiveServicesService(
+            AppSettings settings,
+            ITranslateClient translateClient,
+            ILogger logger)
         {
+            this.settings = settings;
+            this.translateClient = translateClient ?? throw new ArgumentNullException(nameof(translateClient));
             _logger = logger;
 
             _speechConfig = SpeechConfig.FromSubscription(settings.SpeechConfigKey, settings.SpeechConfigRegion);
-            _speechConfig.SpeechSynthesisLanguage = settings.BotLanguage;
-            _speechConfig.SpeechRecognitionLanguage = settings.BotLanguage;
+            _speechConfig.SpeechRecognitionLanguage = settings.SpeechRecognitionLanguage;
+            _speechConfig.SpeechSynthesisLanguage = settings.SpeechSynthesisLanguage;
 
             var audioConfig = AudioConfig.FromStreamOutput(_audioOutputStream);
             _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig);
-
         }
 
         /// <summary>
@@ -63,7 +78,7 @@ namespace EchoBot.Services.Media
 
             try
             {
-                // audio for a 1:1 call
+                // audio for a 1:1 call (or unmixed audio)
                 var bufferLength = audioBuffer.Length;
                 if (bufferLength > 0)
                 {
@@ -75,16 +90,42 @@ namespace EchoBot.Services.Media
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Exception happend writing to input stream");
+                _logger.LogError(e, "Exception happened writing to input stream");
+            }
+        }
+
+        public async Task AppendAudioBuffer(UnmixedAudioBuffer audioBuffer, string displayName)
+        {
+            // TODO must be running in parallel and per speaker??!!
+            this.currentSpeakerDisplayName = displayName;
+            this._logger.LogDebug($"Unmixed audio buffer received for speaker id: {audioBuffer.ActiveSpeakerId}, name: {displayName}");
+
+            if (!_isRunning)
+            {
+                Start();
+                await ProcessSpeech();
+            }
+
+            try
+            {
+                var bufferLength = audioBuffer.Length;
+                if (bufferLength > 0)
+                {
+                    var buffer = new byte[bufferLength];
+                    Marshal.Copy(audioBuffer.Data, buffer, 0, (int)bufferLength);
+
+                    _audioInputStream.Write(buffer);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Exception happened writing to input stream");
             }
         }
 
         protected virtual void OnSendMediaBufferEventArgs(object sender, MediaStreamEventArgs e)
         {
-            if (SendMediaBuffer != null)
-            {
-                SendMediaBuffer(this, e);
-            }
+            this.SendMediaBuffer?.Invoke(this, e);
         }
 
         public event EventHandler<MediaStreamEventArgs> SendMediaBuffer;
@@ -143,7 +184,7 @@ namespace EchoBot.Services.Media
 
                 _recognizer.Recognizing += (s, e) =>
                 {
-                    _logger.LogInformation($"RECOGNIZING: Text={e.Result.Text}");
+                    _logger.LogDebug($"RECOGNIZING: Text={e.Result.Text}");
                 };
 
                 _recognizer.Recognized += async (s, e) =>
@@ -153,10 +194,14 @@ namespace EchoBot.Services.Media
                         if (string.IsNullOrEmpty(e.Result.Text))
                             return;
 
-                        _logger.LogInformation($"RECOGNIZED: Text={e.Result.Text}");
+                        _logger.LogInformation($"===> From={this.currentSpeakerDisplayName}, Text={e.Result.Text}");
+
                         // We recognized the speech
                         // Now do Speech to Text
-                        await TextToSpeech(e.Result.Text);
+                        if (this.settings.UseTextToSpeech)
+                        {
+                            await TextToSpeech(e.Result.Text);
+                        }
                     }
                     else if (e.Result.Reason == ResultReason.NoMatch)
                     {
@@ -181,7 +226,7 @@ namespace EchoBot.Services.Media
                 _recognizer.SessionStarted += async (s, e) =>
                 {
                     _logger.LogInformation("\nSession started event.");
-                    await TextToSpeech("Hello");
+                    await TextToSpeech("Welcome to the call.", translate: false);
                 };
 
                 _recognizer.SessionStopped += (s, e) =>
@@ -208,28 +253,49 @@ namespace EchoBot.Services.Media
             catch (Exception ex)
             {
                 // Catch all other exceptions and log
-                _logger.LogError(ex, "Caught Exception");
+                _logger.LogError(ex, $"Caught Exception: {ex.Message}");
             }
 
             _isDraining = false;
         }
 
-        private async Task TextToSpeech(string text)
+        private async Task TextToSpeech(string text, bool translate = true)
         {
+            if (translate && _speechConfig.SpeechRecognitionLanguage != _speechConfig.SpeechSynthesisLanguage)
+            {
+                var translatedText = Translate(text, _speechConfig.SpeechRecognitionLanguage, _speechConfig.SpeechSynthesisLanguage);
+                text = translatedText.First().Translations.First().Text;
+            }
+
             // convert the text to speech
             SpeechSynthesisResult result = await _synthesizer.SpeakTextAsync(text);
             // take the stream of the result
             // create 20ms media buffers of the stream
             // and send to the AudioSocket in the BotMediaStream
-            using (var stream = AudioDataStream.FromResult(result))
+            using var stream = AudioDataStream.FromResult(result);
+
+            var currentTick = DateTime.Now.Ticks;
+            MediaStreamEventArgs args = new MediaStreamEventArgs
             {
-                var currentTick = DateTime.Now.Ticks;
-                MediaStreamEventArgs args = new MediaStreamEventArgs
+                AudioMediaBuffers = Util.Utilities.CreateAudioMediaBuffers(stream, currentTick, this._logger)
+            };
+            this.OnSendMediaBufferEventArgs(this, args);
+        }
+
+        private IList<ResponseBody> Translate(string text, string fromLanguage, string toLanguage) {
+            var response = translateClient.Translate(
+                new RequestContent(text),
+                new RequestParameter
                 {
-                    AudioMediaBuffers = Util.Utilities.CreateAudioMediaBuffers(stream, currentTick, _logger)
-                };
-                OnSendMediaBufferEventArgs(this, args);
-            }
+                    From = fromLanguage, // Optional, will be auto-discovered
+                    To = new[] { toLanguage }, // You can translate to multiple language at once.
+                    IncludeAlignment = true, // Return what was translated by what. (see documentation)
+                });
+
+            // response = array of sentences + array of target language
+            _logger.LogInformation(response.First().Translations.First().Text);
+
+            return response;
         }
     }
 }

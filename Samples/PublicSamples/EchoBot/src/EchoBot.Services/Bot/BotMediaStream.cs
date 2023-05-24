@@ -25,6 +25,9 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Runtime.InteropServices;
+
+using CognitiveServices.Translator;
+
 using EchoBot.Services.ServiceSetup;
 using Microsoft.Extensions.Logging;
 
@@ -35,7 +38,9 @@ namespace EchoBot.Services.Bot
     /// </summary>
     public class BotMediaStream : ObjectRootDisposable
     {
+        private readonly ITranslateClient translateClient;
         private AppSettings _settings;
+        private readonly Dictionary<string, string> participantDisplayNames = new();
 
         /// <summary>
         /// The participants
@@ -70,6 +75,7 @@ namespace EchoBot.Services.Bot
         public BotMediaStream(
             ILocalMediaSession mediaSession,
             string callId,
+            ITranslateClient translateClient,
             IGraphLogger graphLogger,
             ILogger logger,
             AppSettings settings
@@ -80,6 +86,7 @@ namespace EchoBot.Services.Bot
             ArgumentVerifier.ThrowOnNullArgument(logger, nameof(logger));
             ArgumentVerifier.ThrowOnNullArgument(settings, nameof(settings));
 
+            this.translateClient = translateClient;
             _settings = settings;
 
             this.participants = new List<IParticipant>();
@@ -104,7 +111,7 @@ namespace EchoBot.Services.Bot
 
             if (_settings.UseCognitiveServices)
             {
-                _languageService = new CognitiveServicesService(_settings, _logger);
+                _languageService = new CognitiveServicesService(_settings, translateClient, _logger);
                 _languageService.SendMediaBuffer += this.OnSendMediaBuffer;
             }
         }
@@ -166,11 +173,15 @@ namespace EchoBot.Services.Bot
                 await Task.WhenAll(this.audioSendStatusActive.Task).ConfigureAwait(false);
 
                 _logger.LogInformation("Send status active for audio and video Creating the audio video player");
+
+                // 1000 was there, 100 produces completely different errors
+                const int minEnqueuedMediaLengthInMs = 1000;
+
                 this.audioVideoFramePlayerSettings =
-                    new AudioVideoFramePlayerSettings(new AudioSettings(20), new VideoSettings(), 1000);
+                    new AudioVideoFramePlayerSettings(new AudioSettings(buffersizeInMs: 20), new VideoSettings(), minEnqueuedMediaLengthInMs);
                 this.audioVideoFramePlayer = new AudioVideoFramePlayer(
                     (AudioSocket)_audioSocket,
-                    null,
+                    videoSocket: null,
                     this.audioVideoFramePlayerSettings);
 
                 _logger.LogInformation("created the audio video player");
@@ -193,7 +204,7 @@ namespace EchoBot.Services.Bot
         /// <param name="e">Event arguments.</param>
         private void OnAudioSendStatusChanged(object sender, AudioSendStatusChangedEventArgs e)
         {
-            _logger.LogTrace($"[AudioSendStatusChangedEventArgs(MediaSendStatus={e.MediaSendStatus})]");
+            _logger.LogInformation($"[AudioSendStatusChangedEventArgs(MediaSendStatus={e.MediaSendStatus})]");
 
             if (e.MediaSendStatus == MediaSendStatus.Active)
             {
@@ -215,14 +226,28 @@ namespace EchoBot.Services.Bot
                 if (_languageService != null)
                 {
                     // send audio buffer to language service for processing
-                    // the particpant talking will hear the bot repeat what they said
-                    await _languageService.AppendAudioBuffer(e.Buffer);
+                    // the participant talking will hear the bot repeat what they said
+                    // TODO do not send silence??
+                    // e.Buffer.IsSilence
+
+                    if (e.Buffer.UnmixedAudioBuffers is null)
+                    {
+                        await _languageService.AppendAudioBuffer(e.Buffer);
+                    }
+                    else
+                    {
+                        foreach (var unmixedAudioBuffer in e.Buffer.UnmixedAudioBuffers)
+                        {
+                            var displayName = this.participantDisplayNames.GetValueOrDefault(unmixedAudioBuffer.ActiveSpeakerId.ToString());
+                            await _languageService.AppendAudioBuffer(unmixedAudioBuffer, displayName);
+                        }
+                    }
                     e.Buffer.Dispose();
                 }
                 else
                 {
                     // send audio buffer back on the audio socket
-                    // the particpant talking will hear themselves
+                    // the participant talking will hear themselves
                     var length = e.Buffer.Length;
                     if (length > 0)
                     {
@@ -231,7 +256,17 @@ namespace EchoBot.Services.Bot
 
                         var currentTick = DateTime.Now.Ticks;
                         this.audioMediaBuffers = Util.Utilities.CreateAudioMediaBuffers(buffer, currentTick, _logger);
-                        await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>());
+
+                        // await Task.Delay(TimeSpan.FromSeconds(5));
+                        // TODO why is this null sometimes???
+                        if (this.audioVideoFramePlayer is null)
+                        {
+                            this._logger.LogError("!!! audioVideoFramePlayer is null !!!");
+                        }
+                        else
+                        {
+                            await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>());
+                        }
                     }
                 }
             }
@@ -251,6 +286,19 @@ namespace EchoBot.Services.Bot
 
             this.audioMediaBuffers = e.AudioMediaBuffers;
             var result = Task.Run(async () => await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>())).GetAwaiter();
+        }
+
+        public void AddParticipant(string speakerId, string displayName)
+        {
+            this.participantDisplayNames.Add(speakerId, displayName);
+        }
+
+        public void RemoveParticipant(string speakerId)
+        {
+            if (this.participantDisplayNames.ContainsKey(speakerId))
+            {
+                this.participantDisplayNames.Remove(speakerId);
+            }
         }
     }
 }

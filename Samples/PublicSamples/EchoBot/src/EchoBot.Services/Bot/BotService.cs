@@ -27,6 +27,9 @@ using EchoBot.Services.Util;
 using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
+
+using CognitiveServices.Translator;
+
 using EchoBot.Model.Constants;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -42,6 +45,8 @@ namespace EchoBot.Services.Bot
     /// <seealso cref="EchoBot.Services.Contract.IBotService" />
     public class BotService : IDisposable, IBotService
     {
+        private readonly ITranslateClient translateClient;
+
         /// <summary>
         /// The Graph logger
         /// </summary>
@@ -87,11 +92,13 @@ namespace EchoBot.Services.Bot
         /// <param name="eventPublisher">The event publisher.</param>
         /// <param name="settings">The settings.</param>
         public BotService(
+            ITranslateClient translateClient,
             IGraphLogger graphLogger,
-            ILogger<BotService> logger, 
+            ILogger<BotService> logger,
             IOptions<AppSettings> settings,
             IAzureSettings azureSettings)
         {
+            this.translateClient = translateClient;
             _graphLogger = graphLogger;
             _logger = logger;
             _settings = settings.Value;
@@ -199,11 +206,14 @@ namespace EchoBot.Services.Bot
                 return this.Client.CreateMediaSession(
                     new AudioSocketSettings
                     {
+                        // TODO revert?
+                        // CallId = mediaSessionId.ToString(),
                         StreamDirections = StreamDirection.Sendrecv,
                         // Note! Currently, the only audio format supported when receiving unmixed audio is Pcm16K
                         SupportedAudioFormat = AudioFormat.Pcm16K,
-                        ReceiveUnmixedMeetingAudio = false //get the extra buffers for the speakers
-                },
+                        ReceiveUnmixedMeetingAudio = true //get the extra buffers for the speakers
+                        // ReceiveUnmixedMeetingAudio = false //get the extra buffers for the speakers
+                    },
                     new VideoSocketSettings
                     {
                         StreamDirections = StreamDirection.Inactive
@@ -229,20 +239,16 @@ namespace EchoBot.Services.Bot
                 // Get the policy recording parameters.
 
                 // The context associated with the incoming call.
-                IncomingContext incomingContext =
-                    call.Resource.IncomingContext;
+                IncomingContext incomingContext = call.Resource.IncomingContext;
 
                 // The RP participant.
-                string observedParticipantId =
-                    incomingContext.ObservedParticipantId;
+                string observedParticipantId = incomingContext.ObservedParticipantId;
 
                 // If the observed participant is a delegate.
-                IdentitySet onBehalfOfIdentity =
-                    incomingContext.OnBehalfOf;
+                IdentitySet onBehalfOfIdentity = incomingContext.OnBehalfOf;
 
                 // If a transfer occured, the transferor.
-                IdentitySet transferorIdentity =
-                    incomingContext.Transferor;
+                IdentitySet transferorIdentity = incomingContext.Transferor;
 
                 string countryCode = null;
                 EndpointType? endpointType = null;
@@ -277,7 +283,7 @@ namespace EchoBot.Services.Bot
         {
             foreach (var call in args.AddedResources)
             {
-                var callHandler = new CallHandler(call, _settings, _logger);
+                var callHandler = new CallHandler(call, _settings, translateClient, _logger);
                 this.CallHandlers[call.Id] = callHandler;
             }
 

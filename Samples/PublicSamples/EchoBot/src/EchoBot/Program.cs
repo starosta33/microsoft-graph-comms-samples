@@ -8,7 +8,7 @@ using Microsoft.ApplicationInsights.Channel;
 
 namespace EchoBot
 {
-    class Program
+    public static class Program
     {
         /// <summary>
         /// Defines the entry point of the application.
@@ -40,7 +40,8 @@ namespace EchoBot
                     // you can use appsettings or environment variables
                     // tell the builder to look for the appsettings.json file
                     builder
-                        .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                        .AddJsonFile("appsettings.json5", optional: false, reloadOnChange: true)
+                        .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
                         .AddEnvironmentVariables();
 
                     var bot = new AppHost();

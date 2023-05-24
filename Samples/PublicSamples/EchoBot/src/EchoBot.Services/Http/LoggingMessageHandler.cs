@@ -125,7 +125,7 @@ namespace EchoBot.Services.Http
             }
 
             this.logger.LogHttpMessage(
-                TraceLevel.Verbose,
+                TraceLevel.Info,
                 direction,
                 HttpTraceType.HttpRequest,
                 request.RequestUri.ToString(),
@@ -154,7 +154,7 @@ namespace EchoBot.Services.Http
             }
 
             this.logger.LogHttpMessage(
-                TraceLevel.Verbose,
+                TraceLevel.Info,
                 direction,
                 HttpTraceType.HttpResponse,
                 request.RequestUri.ToString(),

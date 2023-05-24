@@ -75,6 +75,8 @@ namespace EchoBot.Services.ServiceSetup
                 // calls come in over 443 (external) and route to the internally hosted port: BotCallingInternalPort
                 _settings.BotInstanceExternalPort = 443;
                 _settings.BotInternalPort = _settings.BotCallingInternalPort;
+
+                // TODO?
                 _settings.BotInternalHostingProtocol = "http";
 
                 if (string.IsNullOrEmpty(_settings.MediaDnsName)) throw new ArgumentNullException(nameof(_settings.MediaDnsName));
@@ -96,17 +98,20 @@ namespace EchoBot.Services.ServiceSetup
 
             _logger.LogInformation("Fetching Certificate");
             X509Certificate2 defaultCertificate = this.GetCertificateFromStore();
-            
+
             //List<string> controlListenUris = new List<string>();
             // localhost
             var baseDomain = "+";
+            // var baseDomain = "transv2alexpoz.ngrok.io";
 
             // external URLs always are https
             var botCallingExternalUrl = $"https://{_settings.ServiceDnsName}:443/joinCall";
             var botCallingInternalUrl = $"{ _settings.BotInternalHostingProtocol }://localhost:{_settings.BotCallingInternalPort}/";
 
-            var botInstanceExternalUrl = $"https://{_settings.ServiceDnsName}:{_settings.BotInstanceExternalPort}/{HttpRouteConstants.CallSignalingRoutePrefix}/{HttpRouteConstants.OnNotificationRequestRoute} (Existing calls notifications/updates)";
-            var botInstanceInternalUrl = $"{_settings.BotInternalHostingProtocol}://localhost:{_settings.BotInternalPort}/{HttpRouteConstants.CallSignalingRoutePrefix}/{HttpRouteConstants.OnNotificationRequestRoute} (Existing calls notifications/updates)";
+            // var botInstanceExternalUrl = $"https://{_settings.ServiceDnsName}:{_settings.BotInstanceExternalPort}/{HttpRouteConstants.CallSignalingRoutePrefix}/{HttpRouteConstants.OnNotificationRequestRoute} (Existing calls notifications/updates)";
+            var botInstanceExternalUrl = $"https://{_settings.ServiceDnsName}:{_settings.BotInstanceExternalPort}/{HttpRouteConstants.CallSignalingRoutePrefix}/{HttpRouteConstants.OnNotificationRequestRoute}";
+            // var botInstanceInternalUrl = $"{_settings.BotInternalHostingProtocol}://localhost:{_settings.BotInternalPort}/{HttpRouteConstants.CallSignalingRoutePrefix}/{HttpRouteConstants.OnNotificationRequestRoute} (Existing calls notifications/updates)";
+            var botInstanceInternalUrl = $"{_settings.BotInternalHostingProtocol}://localhost:{_settings.BotInternalPort}/{HttpRouteConstants.CallSignalingRoutePrefix}/{HttpRouteConstants.OnNotificationRequestRoute}";
 
 
             // Create structured config objects for service.
@@ -114,9 +119,11 @@ namespace EchoBot.Services.ServiceSetup
 
             // http for local development
             // https for running on VM
-            var controlListenUris = new HashSet<string>();
-            controlListenUris.Add($"{_settings.BotInternalHostingProtocol}://{baseDomain}:{_settings.BotCallingInternalPort}/");
-            controlListenUris.Add($"{_settings.BotInternalHostingProtocol}://{baseDomain}:{_settings.BotInternalPort}/");
+            var controlListenUris = new HashSet<string>
+            {
+                $"{this._settings.BotInternalHostingProtocol}://{baseDomain}:{this._settings.BotCallingInternalPort}/",
+                $"{this._settings.BotInternalHostingProtocol}://{baseDomain}:{this._settings.BotInternalPort}/"
+            };
 
             this.CallControlListeningUrls = controlListenUris;
             _logger.LogInformation("Initializing Media");
@@ -126,6 +133,9 @@ namespace EchoBot.Services.ServiceSetup
                 {
                     CertificateThumbprint = defaultCertificate.Thumbprint,
                     InstanceInternalPort = _settings.MediaInternalPort,
+
+                    // TODO!
+                    // InstancePublicIPAddress = IPAddress.Parse("178.17.3.152"),
                     InstancePublicIPAddress = IPAddress.Any,
                     InstancePublicPort = _settings.MediaInstanceExternalPort,
                     ServiceFqdn = _settings.MediaDnsName

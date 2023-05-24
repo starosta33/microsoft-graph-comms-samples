@@ -7,7 +7,7 @@
 // Last Modified On : 02-28-2022
 // ***********************************************************************
 // <copyright file="ServiceHost.cs" company="Microsoft">
-//     Copyright ©  2020
+//     Copyright Â©  2020
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
@@ -70,7 +70,13 @@ namespace EchoBot.Services.ServiceSetup
 
                 if (bool.TryParse(appSettings[nameof(AppSettings.UseLocalDevSettings)], out _))
                 {
-                    build.AddConsole();
+                    // build.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Warning);
+                    build.AddSimpleConsole(o =>
+                    {
+                        o.SingleLine = true;
+                        o.TimestampFormat = "ss.fff - ";
+                        o.IncludeScopes = false;
+                    });
                 }
             });
 
